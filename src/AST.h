@@ -8,6 +8,7 @@
 // Number    ::= INT_CONST;
 
 // ---------------------------------------------
+
 // Stmt        ::= "return" Exp ";";
 
 // Exp         ::= UnaryExp;
@@ -15,6 +16,18 @@
 // Number      ::= INT_CONST;
 // UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
 // UnaryOp     ::= "+" | "-" | "!";
+
+// ---------------------------------------------
+// Exp         ::= AddExp;
+// AddExp      ::= MulExp | AddExp ("+" | "-") MulExp;
+// MulExp      ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp;
+// UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
+// PrimaryExp  ::= "(" Exp ")" | Number;
+// Number      ::= INT_CONST;
+// UnaryOp     ::= "+" | "-" | "!";
+
+
+// 有一个问题，怎么较好地debug AST？（较好地打印AST信息）
 
 #pragma once
 #include <memory>
@@ -78,7 +91,7 @@ class BlockAST : public BaseAST {
 };
 
 class StmtAST : public BaseAST {
- public:
+  public:
   // int number;
   std::unique_ptr<BaseAST> exp;
 
@@ -90,13 +103,61 @@ class StmtAST : public BaseAST {
 
 class ExpAST : public BaseAST {
   public:
-    std::unique_ptr<BaseAST> unaryExp;
+  std::unique_ptr<BaseAST> addExp;
 
   void DumpAST() const override;
 
   void DumpIR() const override;
 
   void debugAST() const override;
+};
+
+class addExp_2_mulExp_AST : public BaseAST {
+  public:
+    std::unique_ptr<BaseAST> mulExp;
+
+    void DumpAST() const override;
+
+    void DumpIR() const override;
+
+    void debugAST() const override;
+};
+
+class addExp_2_addExp_op_mulExp_AST : public BaseAST {
+  public:
+    std::unique_ptr<BaseAST> addExp;
+    std::string op;
+    std::unique_ptr<BaseAST> mulExp;
+
+    void DumpAST() const override;
+
+    void DumpIR() const override;
+
+    void debugAST() const override;
+};
+
+class mulExp_2_unaryExp_AST : public BaseAST {
+  public:
+    std::unique_ptr<BaseAST> unaryExp;
+
+    void DumpAST() const override;
+
+    void DumpIR() const override;
+
+    void debugAST() const override;
+};
+
+class mulExp_2_mulExp_op_unaryExp_AST : public BaseAST {
+  public:
+    std::unique_ptr<BaseAST> mulExp;
+    std::string op;
+    std::unique_ptr<BaseAST> unaryExp;
+
+    void DumpAST() const override;
+
+    void DumpIR() const override;
+
+    void debugAST() const override;
 };
 
 class unaryExp_2_primaryExp_AST : public BaseAST {
