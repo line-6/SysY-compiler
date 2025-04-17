@@ -23,14 +23,15 @@ int main(int argc, const char *argv[]) {
   auto output = argv[4];
 
   // 拿到输入 Sysy 程序的 ast
-  yyin = fopen(input, "r");
+  yyin = fopen(input, "r"); 
   assert(yyin);
   unique_ptr<BaseAST> ast;
   auto ret = yyparse(ast);
   assert(!ret);
 
-  // ast->debugAST();
-  // ast->DumpAST();
+  ast->debugAST();
+  std::cout << "*****************" << std::endl;
+  ast->DumpAST();
 
   // koopa_ir codegen
   if (strcmp(mode, "-koopa") == 0) {

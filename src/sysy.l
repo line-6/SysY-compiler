@@ -23,11 +23,6 @@ Dec_num         [1-9][0-9]*
 Oct_num         0[0-7]*
 Hex_num         0[xX][0-9a-fA-F]+
 
-unaryOp         [+\-!]
-
-parent_left     "("
-parent_right    ")"
-
 %%
 
 {WhiteSpace}    { /* 忽略, 不做任何操作 */ }
@@ -53,19 +48,6 @@ parent_right    ")"
 
 {Hex_num}       {   yylval.int_val = strtol(yytext, nullptr, 0); 
                     return INT_CONST; }
-
-{unaryOp}       {   /* return yytext[0]; */ 
-                    yylval.str_val = new string(yytext); 
-                    /* std::cout << "this is op: " + *yylval.str_val<< std::endl; */
-                    return UNARYOP; }
-
-{parent_left}   {   yylval.str_val = new string(yytext);
-                    /* std::cout << "this is left parent: " + *yylval.str_val<< std::endl; */
-                    return PARENT_LEFT;}
-
-{parent_right}  {   yylval.str_val = new string(yytext);
-                    /* std::cout << "this is right parent: " + *yylval.str_val<< std::endl; */
-                    return PARENT_RIGHT;}
 
 .               {   /* std::cout << "this is .:" + yytext[0]<< std::endl; */
                     return yytext[0]; }

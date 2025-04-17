@@ -13,7 +13,7 @@ void BaseAST::debugAST() const {
 void CompUnitAST::DumpAST() const {
     std::cout << "CompUnitAST { " << std::endl;
     func_def->DumpAST();
-    std::cout << "}";
+    std::cout << "}" << std::endl;
 }
 
 void CompUnitAST::DumpIR() const {
@@ -21,10 +21,10 @@ void CompUnitAST::DumpIR() const {
 }
 
 void CompUnitAST::debugAST() const {
-    std::cout << std::endl << "this is UnitAST" << std::endl;
-    std::cout << "CompUnitAST { " << std::endl;
+    std::cout << "CompUnitAST:" << std::endl;
+    // std::cout << "CompUnitAST { " << std::endl;
     func_def->debugAST();
-    std::cout << "}";
+    // std::cout << "}";
 }
 
 
@@ -44,12 +44,12 @@ void FuncDefAST::DumpIR() const {
 }
 
 void FuncDefAST::debugAST() const {
-    std::cout << std::endl << "this is FuncDefAST" << std::endl;
-    std::cout << "  FuncDefAST { " << std::endl;
+    //std::cout << std::endl << "this is FuncDefAST" << std::endl;
+    std::cout << "  FuncDefAST:" << std::endl;
     func_type->debugAST();
-    std::cout << "    FuncIdent { " << ident << " }, " << std::endl;
+    // std::cout << "    FuncIdent { " << ident << " }, " << std::endl;
     block->debugAST();
-    std::cout << "  }," << std::endl;
+    // std::cout << "  }," << std::endl;
 }
 
 
@@ -64,8 +64,8 @@ void FuncTypeAST::DumpIR() const {
 }
 
 void FuncTypeAST::debugAST() const {
-    std::cout << std::endl << "this is FuncTypeAST" << std::endl;
-    std::cout << "    FuncTypeAST { " << func_type << " }," << std::endl;
+    std::cout << "    FuncTypeAST:" << std::endl;
+   // std::cout << "    FuncTypeAST { " << func_type << " }," << std::endl;
 }
 
 
@@ -84,10 +84,10 @@ void BlockAST::DumpIR() const {
 }
 
 void BlockAST::debugAST() const {
-    std::cout << std::endl << "this is BlockAST" << std::endl;
-    std::cout << "    BlockAST { " << std::endl;
+    std::cout << "    BlockAST:" << std::endl;
+    // std::cout << "    BlockAST { " << std::endl;
     stmt->debugAST();
-    std::cout << "    }," << std::endl;
+    // std::cout << "    }," << std::endl;
 }
 
 
@@ -100,9 +100,6 @@ void StmtAST::DumpAST() const {
 }
 
 void StmtAST::DumpIR() const {
-    // if (koopa_inst_pc == 0) {
-    //   std::cout << "  ret 0" << std::endl;
-    // }
     exp->DumpIR();
     if (koopa_inst_pc == 0) {
         std::cout << "  ret " << st_imdata.top() << std::endl;
@@ -111,31 +108,115 @@ void StmtAST::DumpIR() const {
     else {
         std::cout << "  ret %" << koopa_inst_pc - 1 << std::endl;
     }
-    
-    
 }
 
 void StmtAST::debugAST() const {
-    std::cout << std::endl << "this is StmtAST" << std::endl;
-    std::cout << "       StmtAST { " << std::endl;
-    std::cout << "        ";
+    std::cout << "      StmtAST:" << std::endl;
+    // std::cout << "       StmtAST { " << std::endl;
+    // std::cout << "        ";
     exp->debugAST();
-    std::cout << std::endl;
-    std::cout << "       }," << std::endl;
+    // std::cout << std::endl;
+    // std::cout << "       }," << std::endl;
 }
 
 
 void ExpAST::DumpAST() const {
     // std::cout << "        ";
-    unaryExp->DumpAST();
+    addExp->DumpAST();
   }
 
 void ExpAST::DumpIR() const {
-    unaryExp->DumpIR();
+    addExp->DumpIR();
 }
 
 void ExpAST::debugAST() const {
-    std::cout << std::endl << "*****debug: this is ExpAST*****" << std::endl;
+    std::cout << "        addAST -> ExpAST" << std::endl;
+    addExp->debugAST();
+}
+
+
+void addExp_2_mulExp_AST::DumpAST() const {
+    mulExp->DumpAST();
+}
+
+void addExp_2_mulExp_AST::DumpIR() const {
+    mulExp->DumpIR();
+}
+
+void addExp_2_mulExp_AST::debugAST() const {
+    std::cout << "        mulExp -> addExp" << std::endl;
+    mulExp->debugAST();
+}
+
+
+void addExp_2_addExp_op_mulExp_AST::DumpAST() const {
+    // std::cout << "        ";
+    addExp->DumpAST();
+    std::cout << op;
+    mulExp->DumpAST();
+}
+
+void addExp_2_addExp_op_mulExp_AST::DumpIR() const {
+    addExp->DumpIR();
+    mulExp->DumpIR();
+    // 两个立即数相加，先前没有其他指令执行，直接add
+    if (koopa_inst_pc == 0) {
+        int right = st_imdata.top();
+        st_imdata.pop();
+        int left = st_imdata.top();
+        st_imdata.pop();
+        std::cout << "  %" << koopa_inst_pc << " = add " << left << ", "  << right << std::endl;
+        koopa_inst_pc ++;
+    }
+    // 问题来了，形如 1 * 2 + 3 * 4 的形式，如何获得 1 * 2 结果的指令pc和 3 * 4 结果的指令pc？
+    // 潜在的解决方案：给每个 ast 类新加一个变量 inst_pc，记录当前被执行时的 pc ？仅在 $$ -> $1 op $2时记录pc
+    // 好像不行，因为类在不停变换，pc值在真正要用的时候已经找不到其具体在那个类成员里了
+}
+
+void addExp_2_addExp_op_mulExp_AST::debugAST() const {
+    std::cout << "        addExp op mulExp -> addExp" << std::endl;
+    addExp->debugAST();
+    mulExp->debugAST();
+    //std::cout << "        addExp op mulExp -> addExp" << std::endl;
+}
+
+
+void mulExp_2_unaryExp_AST::DumpAST() const {
+    unaryExp->DumpAST();
+}
+
+void mulExp_2_unaryExp_AST::DumpIR() const {
+    unaryExp->DumpIR();
+}
+
+void mulExp_2_unaryExp_AST::debugAST() const {
+    std::cout << "        unaryExp -> mulExp" << std::endl;
+    unaryExp->debugAST();
+} 
+
+
+void mulExp_2_mulExp_op_unaryExp_AST::DumpAST() const {
+   mulExp->DumpAST();
+   std::cout << op;
+   unaryExp->DumpAST();
+}
+
+void mulExp_2_mulExp_op_unaryExp_AST::DumpIR() const {
+    mulExp->DumpIR();
+    unaryExp->DumpIR();
+    if (koopa_inst_pc == 0) {
+        int right = st_imdata.top();
+        st_imdata.pop();
+        int left = st_imdata.top();
+        st_imdata.pop();
+        std::cout << "  %" << koopa_inst_pc << " = mul " << left << ", "  << right << std::endl;
+        koopa_inst_pc ++;
+    }
+}
+
+void mulExp_2_mulExp_op_unaryExp_AST::debugAST() const {
+    std::cout << "        mulExp op unaryExp -> mulExp" << std::endl;
+    mulExp->debugAST();
     unaryExp->debugAST();
 }
 
@@ -149,7 +230,7 @@ void unaryExp_2_primaryExp_AST::DumpIR() const {
   }
 
 void unaryExp_2_primaryExp_AST::debugAST() const {
-    std::cout << std::endl << "*****debug: this is unaryExp_2_primaryExp_AST*****" << std::endl;
+    std::cout << "        primaryExp -> unaryExp" << std::endl;
     primaryExp->debugAST();
   }
 
@@ -195,8 +276,8 @@ void unaryExp_2_unaryOp_and_unaryExp_AST::DumpIR() const {
 }
 
 void unaryExp_2_unaryOp_and_unaryExp_AST::debugAST() const {
-    std::cout << std::endl << "*****debug: this is unaryExp_2_unaryOp_and_unaryExp_AST*****" << std::endl;
-    std::cout << unaryOp;
+    std::cout << "        unaryOp: " << unaryOp << " unaryExp -> unaryExp" << std::endl;
+    //std::cout << unaryOp;
     unaryExp->debugAST();
 }
 
@@ -212,10 +293,8 @@ void primaryExp_2_Exp_AST::DumpIR() const {
 }
 
 void primaryExp_2_Exp_AST::debugAST() const {
-    std::cout << std::endl << "*****debug: this is primaryExp_2_Exp_AST*****" << std::endl;
-    std::cout << "(";
+    std::cout << "        Exp -> primaryExp" << std::endl;
     exp->debugAST();
-    std::cout << ")";
 }
 
 
@@ -229,6 +308,5 @@ void primaryExp_2_num_AST::DumpIR() const {
 }
 
 void primaryExp_2_num_AST::debugAST() const {
-    std::cout << std::endl << "*****debug: primaryExp_2_num_AST*****" << std::endl;
-    std::cout << number;
+    std::cout << "        num " << number << " -> primaryExp" << std::endl;
 }
