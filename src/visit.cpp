@@ -1,5 +1,5 @@
 #include "visit.h"
-#include "dump.h"
+#include "dump_helper.h"
 #include <cassert>
 #include <iostream>
 #include <string>
