@@ -1,15 +1,21 @@
 #include "AST.h"
 #include <iostream>
+#include <list>
 
-int koopa_inst_pc = 0;
-std::stack<int> st_imdata;
+static int temp_var_no = 0;
+static std::list<int> temp_var_list;
+static int NewTempVar() {
+    temp_var_list.push_back(temp_var_no++);
+    return temp_var_list.back();
+}
 
 // 所有 AST 的基类
 void BaseAST::debugAST() const {
     std::cout << "this is BaseAST" << std::endl;
 }
 
-
+//===----------definition of CompUnitAST----------------===//
+//===--------------------------------------------------===//
 void CompUnitAST::DumpAST() const {
     std::cout << "CompUnitAST { " << std::endl;
     func_def->DumpAST();
@@ -27,7 +33,8 @@ void CompUnitAST::debugAST() const {
     // std::cout << "}";
 }
 
-
+//===----------definition of FuncDefAST----------------===//
+//===--------------------------------------------------===//
 void FuncDefAST::DumpAST() const {
     std::cout << "  FuncDefAST { " << std::endl;
     func_type->DumpAST();
@@ -52,7 +59,8 @@ void FuncDefAST::debugAST() const {
     // std::cout << "  }," << std::endl;
 }
 
-
+//===----------definition of FuncTypeAST----------------===//
+//===--------------------------------------------------===//
 void FuncTypeAST::DumpAST() const {
     std::cout << "    FuncTypeAST { " << func_type << " }," << std::endl;
 }
@@ -68,7 +76,8 @@ void FuncTypeAST::debugAST() const {
    // std::cout << "    FuncTypeAST { " << func_type << " }," << std::endl;
 }
 
-
+//===----------definition of BlockAST----------------===//
+//===--------------------------------------------------===//
 void BlockAST::DumpAST() const {
     std::cout << "    BlockAST { " << std::endl;
     stmt->DumpAST();
@@ -90,7 +99,8 @@ void BlockAST::debugAST() const {
     // std::cout << "    }," << std::endl;
 }
 
-
+//===----------definition of StmtAST----------------===//
+//===--------------------------------------------------===//
 void StmtAST::DumpAST() const {
     std::cout << "       StmtAST { " << std::endl;
     std::cout << "        ";
@@ -100,14 +110,9 @@ void StmtAST::DumpAST() const {
 }
 
 void StmtAST::DumpIR() const {
+    exp->Eval();    // dump 前先 evaluate 每个节点
     exp->DumpIR();
-    if (koopa_inst_pc == 0) {
-        std::cout << "  ret " << st_imdata.top() << std::endl;
-        st_imdata.pop();
-    }
-    else {
-        std::cout << "  ret %" << koopa_inst_pc - 1 << std::endl;
-    }
+    std::cout << "  ret " << exp->GetPc() << std::endl;
 }
 
 void StmtAST::debugAST() const {
@@ -119,194 +124,270 @@ void StmtAST::debugAST() const {
     // std::cout << "       }," << std::endl;
 }
 
+//===----------definition of BaseExpAST----------------===//
+//===--------------------------------------------------===//
+std::string ExpBaseAST::GetPc() {
+    if (is_number) return std::to_string(val);
+    else {
+        return "%" + std::to_string(addr);
+    }
+}
 
+//===----------definition of ExpAST-------------------===//
+// Exp ::= AddExp;
+//===-------------------------------------------------===//
 void ExpAST::DumpAST() const {
     // std::cout << "        ";
-    addExp->DumpAST();
+    add_exp->DumpAST();
   }
 
 void ExpAST::DumpIR() const {
-    addExp->DumpIR();
+    add_exp->DumpIR();
 }
 
 void ExpAST::debugAST() const {
-    std::cout << "        addAST -> ExpAST" << std::endl;
-    addExp->debugAST();
+    std::cout << "        AddAST -> ExpAST" << std::endl;
+    add_exp->debugAST();
 }
 
-
-void addExp_2_mulExp_AST::DumpAST() const {
-    mulExp->DumpAST();
+void ExpAST::Eval() {
+    add_exp->Eval();
+    // whether is num depends on the son.
+    is_number = add_exp->is_number;
+    val = add_exp->val;
+    addr = add_exp->addr;
 }
-
-void addExp_2_mulExp_AST::DumpIR() const {
-    mulExp->DumpIR();
-}
-
-void addExp_2_mulExp_AST::debugAST() const {
-    std::cout << "        mulExp -> addExp" << std::endl;
-    mulExp->debugAST();
-}
-
-
-void addExp_2_addExp_op_mulExp_AST::DumpAST() const {
-    // std::cout << "        ";
-    addExp->DumpAST();
-    std::cout << op;
-    mulExp->DumpAST();
-}
-
-void addExp_2_addExp_op_mulExp_AST::DumpIR() const {
-    addExp->DumpIR();
-    mulExp->DumpIR();
-    // 两个立即数相加，先前没有其他指令执行，直接add
-    if (koopa_inst_pc == 0) {
-        int right = st_imdata.top();
-        st_imdata.pop();
-        int left = st_imdata.top();
-        st_imdata.pop();
-        std::cout << "  %" << koopa_inst_pc << " = add " << left << ", "  << right << std::endl;
-        koopa_inst_pc ++;
-    }
-    // 问题来了，形如 1 * 2 + 3 * 4 的形式，如何获得 1 * 2 结果的指令pc和 3 * 4 结果的指令pc？
-    // 潜在的解决方案：给每个 ast 类新加一个变量 inst_pc，记录当前被执行时的 pc ？仅在 $$ -> $1 op $2时记录pc
-    // 好像不行，因为类在不停变换，pc值在真正要用的时候已经找不到其具体在那个类成员里了
-}
-
-void addExp_2_addExp_op_mulExp_AST::debugAST() const {
-    std::cout << "        addExp op mulExp -> addExp" << std::endl;
-    addExp->debugAST();
-    mulExp->debugAST();
-    //std::cout << "        addExp op mulExp -> addExp" << std::endl;
-}
-
-
-void mulExp_2_unaryExp_AST::DumpAST() const {
-    unaryExp->DumpAST();
-}
-
-void mulExp_2_unaryExp_AST::DumpIR() const {
-    unaryExp->DumpIR();
-}
-
-void mulExp_2_unaryExp_AST::debugAST() const {
-    std::cout << "        unaryExp -> mulExp" << std::endl;
-    unaryExp->debugAST();
-} 
-
-
-void mulExp_2_mulExp_op_unaryExp_AST::DumpAST() const {
-   mulExp->DumpAST();
-   std::cout << op;
-   unaryExp->DumpAST();
-}
-
-void mulExp_2_mulExp_op_unaryExp_AST::DumpIR() const {
-    mulExp->DumpIR();
-    unaryExp->DumpIR();
-    if (koopa_inst_pc == 0) {
-        int right = st_imdata.top();
-        st_imdata.pop();
-        int left = st_imdata.top();
-        st_imdata.pop();
-        std::cout << "  %" << koopa_inst_pc << " = mul " << left << ", "  << right << std::endl;
-        koopa_inst_pc ++;
-    }
-}
-
-void mulExp_2_mulExp_op_unaryExp_AST::debugAST() const {
-    std::cout << "        mulExp op unaryExp -> mulExp" << std::endl;
-    mulExp->debugAST();
-    unaryExp->debugAST();
-}
-
-
-void unaryExp_2_primaryExp_AST::DumpAST() const {
-    primaryExp->DumpAST();
-  }
-
-void unaryExp_2_primaryExp_AST::DumpIR() const {
-    primaryExp->DumpIR();
-  }
-
-void unaryExp_2_primaryExp_AST::debugAST() const {
-    std::cout << "        primaryExp -> unaryExp" << std::endl;
-    primaryExp->debugAST();
-  }
-
-
-void unaryExp_2_unaryOp_and_unaryExp_AST::DumpAST() const {
-    std::cout << unaryOp;
-    unaryExp->DumpAST();
-}
-
-void unaryExp_2_unaryOp_and_unaryExp_AST::DumpIR() const {
-    if (unaryOp == "+") {
-      // ignore '+'
-      unaryExp->DumpIR();
-    }
-    else if (unaryOp == "-") {
-      unaryExp->DumpIR();
-      std::cout << "  %" << koopa_inst_pc << " = sub 0, ";
-      if (koopa_inst_pc == 0) {
-        std::cout << st_imdata.top() << std::endl;
-        st_imdata.pop();
-      } 
-      else {
-        std::cout << "%" << koopa_inst_pc - 1 << std::endl;
-      }
-      koopa_inst_pc ++;
-    }
-    else if (unaryOp == "!") {
-      unaryExp->DumpIR();
-      std::cout << "  %" << koopa_inst_pc << " = eq ";
-      if (koopa_inst_pc == 0) {
-        std::cout << st_imdata.top();
-        st_imdata.pop();
-        std::cout << ", 0" << std::endl;
-      } 
-      else {
-        std::cout << "%" << koopa_inst_pc - 1 << ", 0" << std::endl;
-      }
-      koopa_inst_pc ++;
+//===----------definition of AddExpAST----------------===//
+// addExp ::= mulExp | addExp ("+" | "-") mulExp;
+//===-------------------------------------------------===//
+void AddExpAST::DumpAST() const {
+    if (add_exp) {
+        add_exp->DumpAST();
+        std::cout << op;
+        mul_exp->DumpAST();
     }
     else {
-      std::cout << "Unknown Operation!" << std::endl;
+        mul_exp->DumpAST();
     }
 }
 
-void unaryExp_2_unaryOp_and_unaryExp_AST::debugAST() const {
-    std::cout << "        unaryOp: " << unaryOp << " unaryExp -> unaryExp" << std::endl;
-    //std::cout << unaryOp;
-    unaryExp->debugAST();
+void AddExpAST::DumpIR() const {
+    if (add_exp) {
+        add_exp->DumpIR();
+        mul_exp->DumpIR();
+        if (op == "+") {
+            std::cout << "  %" << addr << " = " << "add " << add_exp->GetPc() << ", " << mul_exp->GetPc()
+                      << std::endl;
+        }
+        else if (op == "-") {
+            std::cout << "  %" << addr << " = " << "sub " << add_exp->GetPc() << ", " << mul_exp->GetPc()
+                      << std::endl;            
+        }
+    }
+    else {
+        mul_exp->DumpIR();
+    }
 }
 
-
-void primaryExp_2_Exp_AST::DumpAST() const {
-    std::cout << "(";
-    exp->DumpAST();
-    std::cout << ")";
+void AddExpAST::debugAST() const {
+    if (add_exp) {
+        std::cout << "          AddAST op(" << op << ") MulAST" << "-> AddAST" << std::endl;
+        add_exp->debugAST();
+        //std::cout << op;
+        mul_exp->debugAST();
+    }
+    else {
+        std::cout << "          MulAST -> AddAST" << std::endl;
+        mul_exp->debugAST();
+    }
 }
 
-void primaryExp_2_Exp_AST::DumpIR() const {
-    exp->DumpIR();
+void AddExpAST::Eval() {
+    // add := add op mul, absolutely is not number
+    if (add_exp) {
+        add_exp->Eval();
+        mul_exp->Eval();
+        is_number = false;
+        addr = NewTempVar();
+    }
+    // add := mul
+    else {
+        mul_exp->Eval();
+        is_number = mul_exp->is_number;
+        val = mul_exp->val;
+        addr = mul_exp->addr;
+    }
+}
+//===----------definition of MulExpAST----------------===//
+// mulExp ::= unaryExp | mulExp ("*" | "/" | "%") unaryExp;
+//===-------------------------------------------------===//
+void MulExpAST::DumpAST() const {
+    if (mul_exp) {
+        mul_exp->DumpAST();
+        std::cout << op;
+        unary_exp->DumpAST();
+    }
+    else {
+        unary_exp->DumpAST();
+    }
 }
 
-void primaryExp_2_Exp_AST::debugAST() const {
-    std::cout << "        Exp -> primaryExp" << std::endl;
-    exp->debugAST();
+void MulExpAST::DumpIR() const {
+    if (mul_exp) {
+        mul_exp->DumpIR();
+        unary_exp->DumpIR();
+        if (op == "*") {
+            std::cout << "  %" << addr << " = " << "mul " << mul_exp->GetPc() << ", " << unary_exp->GetPc()
+                      << std::endl;
+        }
+        else if (op == "/") {
+            std::cout << "  %" << addr << " = " << "div " << mul_exp->GetPc() << ", " << unary_exp->GetPc()
+                      << std::endl;            
+        }
+        else if (op == "%") {
+            std::cout << "  %" << addr << " = " << "mod " << mul_exp->GetPc() << ", " << unary_exp->GetPc()
+                      << std::endl;            
+        }        
+    }
+    else {
+        unary_exp->DumpIR();
+    }
 }
 
+void MulExpAST::debugAST() const {
+    if (mul_exp) {
+        std::cout << "          MulAST op(" << op << ") UnaryAST" << "-> MulAST" << std::endl;
+        mul_exp->debugAST();
+        //std::cout << op;
+        unary_exp->debugAST();
+    }
+    else {
+        std::cout << "          UnaryAST -> MulAST" << std::endl;
+        unary_exp->debugAST();
+    }
+} 
 
-void primaryExp_2_num_AST::DumpAST() const {
-    std::cout << number;
+void MulExpAST::Eval() {
+    // mul := mul op unary
+    if (mul_exp) {
+        mul_exp->Eval();
+        unary_exp->Eval();
+        is_number = false;
+        addr = NewTempVar();
+    }
+    // mul := unary
+    else {
+        unary_exp->Eval();
+        is_number = unary_exp->is_number;
+        val = unary_exp->val;
+        addr = unary_exp->addr;
+    }
+}
+//===----------definition of UnEaryExpAST----------------===//
+// unaryExp ::= primaryExp | unaryOp unaryExp;
+//===-------------------------------------------------===//
+void UnaryExpAST::DumpAST() const {
+    if (primary_exp) {
+        primary_exp->DumpAST();
+    }
+    else {
+        std::cout << unary_op;
+        unary_exp->DumpAST();
+    }
 }
 
-void primaryExp_2_num_AST::DumpIR() const {
-    //std::cout << " num:" << number << " ";
-    st_imdata.push(number);
+void UnaryExpAST::DumpIR() const {
+    if (unary_exp) {
+        unary_exp->DumpIR();
+        if (unary_op == "+") {
+            unary_exp->DumpIR();
+        }
+        else if (unary_op == "-") {
+            unary_exp->DumpIR();
+            std::cout << "  %" << addr << " = " << "sub 0, " << unary_exp->GetPc()
+                      << std::endl;            
+        }
+        else if (unary_op == "!") {
+            std::cout << "  %" << addr << " = " << "eq 0, " << unary_exp->GetPc()
+                      << std::endl;
+        }
+    }
+    else {
+        primary_exp->DumpIR();
+    }
 }
 
-void primaryExp_2_num_AST::debugAST() const {
-    std::cout << "        num " << number << " -> primaryExp" << std::endl;
+void UnaryExpAST::debugAST() const {
+    if (primary_exp) {
+        std::cout << "          PrimaryAST -> UnaryAST" << std::endl;
+        primary_exp->debugAST();
+    }
+    else {
+        std::cout << "          unary_op(" << unary_op <<") UnaryAST -> MulAST" << std::endl;
+        //std::cout << unary_op;
+        unary_exp->debugAST();
+    }
+}
+
+void UnaryExpAST::Eval() {
+    // unary := op unary
+    if (unary_exp) {
+        unary_exp->Eval();
+        is_number = false;
+        addr = NewTempVar();
+    }
+    // unary := primary
+    else {
+        primary_exp->Eval();
+        is_number = primary_exp->is_number;
+        val = primary_exp->val;
+        addr = primary_exp->addr;
+    }
+}
+//===----------definition of PrimaryExpAST----------------===//
+// primaryExp ::= "(" Exp ")" | Number;
+//===-----------------------------------------------------===//
+void PrimaryExpAST::DumpAST() const {
+    if (exp) {
+        std::cout << "(";
+        exp->DumpAST();
+        std::cout << ")";
+    }
+    else {
+        std::cout << number;
+    }
+}
+
+void PrimaryExpAST::DumpIR() const {
+    if (exp) {
+        exp->DumpIR();
+    }    
+}
+
+void PrimaryExpAST::debugAST() const {
+    if (exp) {
+        std::cout << "          (ExpAST) -> PrimaryAST" << std::endl;
+        //std::cout << "(";
+        exp->debugAST();
+        //std::cout << ")";
+    }
+    else {
+        std::cout << "          number ("  << number << ")" << std::endl;
+        //std::cout << number;
+    }
+}
+
+void PrimaryExpAST::Eval() {
+    // primary := exp
+    if (exp) {
+        exp->Eval();
+        is_number = exp->is_number;
+        val = exp->val;
+        addr = exp->addr;
+    }
+    // primary := NUMBER
+    else {
+        is_number = true;
+        val = number;
+    }
 }

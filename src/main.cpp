@@ -29,18 +29,18 @@ int main(int argc, const char *argv[]) {
   auto ret = yyparse(ast);
   assert(!ret);
 
-  ast->debugAST();
-  std::cout << "*****************" << std::endl;
+  // ast->debugAST();
+  // std::cout << "*****************" << std::endl;
   ast->DumpAST();
 
-  // koopa_ir codegen
+  //koopa_ir codegen
   if (strcmp(mode, "-koopa") == 0) {
-    koopa_codegen(ast, output);
+   koopa_codegen(ast, output);
   }
 
-  // riscv codegen
+  //riscv codegen
   else if (strcmp(mode, "-riscv") == 0) {
-    riscv_codegen(ast, output);
+  riscv_codegen(ast, output);
   }
 
   return 0;

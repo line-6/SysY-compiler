@@ -1,15 +1,13 @@
 // Stmt        ::= "return" Exp ";";
-
-// Exp         ::= unaryExp    =====>
     
-// Exp         ::= addExp;
-// primaryExp  ::= "(" Exp ")" | Number;
+// Exp         ::= AddExp;
+// PrimaryExp  ::= "(" Exp ")" | Number;
 // Number      ::= INT_CONST;
-// unaryExp    ::= primaryExp | unaryOp unaryExp;
+// UnaryExp    ::= PrimaryExp | unaryOp UnaryExp;
 // unaryOp     ::= "+" | "-" | "!";
 
-// mulExp      ::= unaryExp | mulExp ("*" | "/" | "%") unaryExp;
-// addExp      ::= mulExp | addExp ("+" | "-") mulExp;
+// MulExp      ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp;
+// AddExp      ::= MulExp | AddExp ("+" | "-") MulExp;
 
 
 %code requires {
@@ -29,8 +27,8 @@
 int yylex();
 void yyerror(std::unique_ptr<BaseAST> &ast, const char* s);
 BaseAST* handle_unaryOp(const std::string& op, BaseAST* exp);
-BaseAST* handle_addOp(const std::string& op, BaseAST* addExp, BaseAST* mulExp);
-BaseAST* handle_mulOp(const std::string& op, BaseAST* mulExp, BaseAST* unaryExp);
+BaseAST* handle_addOp(const std::string& op, BaseAST* AddExp, BaseAST* MulExp);
+BaseAST* handle_mulOp(const std::string& op, BaseAST* MulExp, BaseAST* UnaryExp);
 
 %}
 
@@ -49,13 +47,15 @@ BaseAST* handle_mulOp(const std::string& op, BaseAST* mulExp, BaseAST* unaryExp)
   std::string *str_val;
   int int_val;
   BaseAST *ast_val;
+  ExpBaseAST* exp_ast_val;
 }
 
 %token INT RETURN 
 %token <str_val> IDENT 
 %token <int_val> INT_CONST
 
-%type <ast_val> FuncDef FuncType Block Stmt Exp addExp mulExp unaryExp primaryExp
+%type <ast_val> FuncDef FuncType Block Stmt 
+%type <exp_ast_val> Exp AddExp MulExp UnaryExp PrimaryExp
 %type <int_val> Number 
 
 %%
@@ -107,59 +107,104 @@ Stmt
   : RETURN Exp ';' {
     //std::cout << std::endl << "this is StmtAST" << std::endl;
     auto ast = new StmtAST();
-    ast->exp = std::unique_ptr<BaseAST>($2);    
+    ast->exp = std::unique_ptr<ExpBaseAST>($2);    
     $$ = ast;
   }
   ;
 
 Exp
-  : addExp {
+  : AddExp {
     auto ast = new ExpAST();
-    ast->addExp = std::unique_ptr<BaseAST>($1);
+    ast->add_exp = std::unique_ptr<ExpBaseAST>($1);
     $$ = ast;
   }
   ;
 
-addExp
-  : mulExp {
-    auto ast = new addExp_2_mulExp_AST();
-    ast->mulExp = std::unique_ptr<BaseAST>($1);
+AddExp
+  : MulExp {
+    auto ast = new AddExpAST();
+    ast->mul_exp = std::unique_ptr<ExpBaseAST>($1);
     $$ = ast;
   }
-  | addExp '+' mulExp { $$ = handle_addOp("+", $1, $3); }
-  | addExp '-' mulExp { $$ = handle_addOp("-", $1, $3); }
-  ;
-
-mulExp
-  : unaryExp {
-    auto ast = new mulExp_2_unaryExp_AST();
-    ast->unaryExp = std::unique_ptr<BaseAST>($1);
+  | AddExp '+' MulExp { 
+    auto ast = new AddExpAST();
+    ast->add_exp = std::unique_ptr<ExpBaseAST>($1);
+    ast->op = "+";
+    ast->mul_exp = std::unique_ptr<ExpBaseAST>($3);
     $$ = ast;
   }
-  | mulExp '*' unaryExp { $$ = handle_mulOp("*", $1, $3); }
-  | mulExp '/' unaryExp { $$ = handle_mulOp("/", $1, $3); }
-  | mulExp '%' unaryExp { $$ = handle_mulOp("%", $1, $3); }
+  | AddExp '-' MulExp { 
+    auto ast = new AddExpAST();
+    ast->add_exp = std::unique_ptr<ExpBaseAST>($1);
+    ast->op = "-";
+    ast->mul_exp = std::unique_ptr<ExpBaseAST>($3);
+    $$ = ast; 
+  }
   ;
 
-unaryExp
-  : primaryExp {
-    auto ast = new unaryExp_2_primaryExp_AST();
-    ast->primaryExp = std::unique_ptr<BaseAST>($1);
+MulExp
+  : UnaryExp {
+    auto ast = new MulExpAST();
+    ast->unary_exp = std::unique_ptr<ExpBaseAST>($1);
     $$ = ast;
   }
-  | '+' unaryExp {  $$ = handle_unaryOp("+", $2); }
-  | '-' unaryExp {  $$ = handle_unaryOp("-", $2); }
-  | '!' unaryExp {  $$ = handle_unaryOp("!", $2); }
+  | MulExp '*' UnaryExp { 
+    auto ast = new MulExpAST();
+    ast->mul_exp = std::unique_ptr<ExpBaseAST>($1);
+    ast->op = "*";
+    ast->unary_exp = std::unique_ptr<ExpBaseAST>($3);
+    $$ = ast; 
+  }
+  | MulExp '/' UnaryExp { 
+    auto ast = new MulExpAST();
+    ast->mul_exp = std::unique_ptr<ExpBaseAST>($1);
+    ast->op = "/";
+    ast->unary_exp = std::unique_ptr<ExpBaseAST>($3);
+    $$ = ast; 
+  }
+  | MulExp '%' UnaryExp { 
+    auto ast = new MulExpAST();
+    ast->mul_exp = std::unique_ptr<ExpBaseAST>($1);
+    ast->op = "%";
+    ast->unary_exp = std::unique_ptr<ExpBaseAST>($3);
+    $$ = ast; 
+  }
   ;
 
-primaryExp
+UnaryExp
+  : PrimaryExp {
+    auto ast = new UnaryExpAST();
+    ast->primary_exp = std::unique_ptr<ExpBaseAST>($1);
+    $$ = ast;
+  }
+  | '+' UnaryExp {
+    auto ast = new UnaryExpAST();
+    ast->unary_exp = std::unique_ptr<ExpBaseAST>($2);
+    ast->unary_op = "+";
+    $$ = ast; 
+  }
+  | '-' UnaryExp {  
+    auto ast = new UnaryExpAST();
+    ast->unary_exp = std::unique_ptr<ExpBaseAST>($2);
+    ast->unary_op = "-";
+    $$ = ast;
+  }
+  | '!' UnaryExp {  
+    auto ast = new UnaryExpAST();
+    ast->unary_exp = std::unique_ptr<ExpBaseAST>($2);
+    ast->unary_op = "!";
+    $$ = ast; 
+  }
+  ;
+
+PrimaryExp
   : '(' Exp ')' {
-    auto ast = new primaryExp_2_Exp_AST();
-    ast->exp = std::unique_ptr<BaseAST>($2);
+    auto ast = new PrimaryExpAST();
+    ast->exp = std::unique_ptr<ExpBaseAST>($2);
     $$ = ast;
   }
   | Number {
-    auto ast = new primaryExp_2_num_AST();
+    auto ast = new PrimaryExpAST();
     ast->number = ($1);
     $$ = ast;
   }
@@ -178,25 +223,27 @@ void yyerror(std::unique_ptr<BaseAST> &ast, const char *s) {
   std::cerr << "error: " << s << std::endl;
 }
 
-BaseAST* handle_unaryOp(const std::string& op, BaseAST* exp) {
-    auto ast = new unaryExp_2_unaryOp_and_unaryExp_AST();
-    ast->unaryExp = std::unique_ptr<BaseAST>(exp);
-    ast->unaryOp = op;
+/* ExpBaseAST* handle_unaryOp(const std::string& op, std::unique_ptr<ExpBaseAST> exp) {
+    auto ast = new UnaryExpAST();
+    ast->unary_exp = std::move(exp);
+    ast->unary_op = op;
     return ast;
 }
 
-BaseAST* handle_addOp(const std::string& op, BaseAST* addExp, BaseAST* mulExp){
-    auto ast = new addExp_2_addExp_op_mulExp_AST();
-    ast->addExp = std::unique_ptr<BaseAST>(addExp);
+ExpBaseAST* handle_addOp(const std::string& op, std::unique_ptr<ExpBaseAST> add_exp, 
+                          std::unique_ptr<ExpBaseAST> mul_exp){
+    auto ast = new AddExpAST();
+    ast->add_exp = std::move(add_exp);
     ast->op = op;
-    ast->mulExp = std::unique_ptr<BaseAST>(mulExp);
+    ast->mul_exp = std::move(mul_exp);
     return ast;
 }
 
-BaseAST* handle_mulOp(const std::string& op, BaseAST* mulExp, BaseAST* unaryExp){
-    auto ast = new mulExp_2_mulExp_op_unaryExp_AST();
-    ast->mulExp = std::unique_ptr<BaseAST>(mulExp);
+ExpBaseAST* handle_mulOp(const std::string& op, std::unique_ptr<ExpBaseAST> mul_exp, 
+                          std::unique_ptr<ExpBaseAST> unary_exp){
+    auto ast = new MulExpAST();
+    ast->mul_exp = std::move(mul_exp);
     ast->op = op;
-    ast->unaryExp = std::unique_ptr<BaseAST>(unaryExp);
+    ast->unary_exp = std::move(unary_exp);
     return ast;
-}
+} */
