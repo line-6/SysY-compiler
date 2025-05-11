@@ -112,7 +112,7 @@ void StmtAST::DumpAST() const {
 void StmtAST::DumpIR() const {
     exp->Eval();    // dump 前先 evaluate 每个节点
     exp->DumpIR();
-    std::cout << "  ret " << exp->GetPc() << std::endl;
+    std::cout << "  ret " << exp->GetValOrAddr() << std::endl;
 }
 
 void StmtAST::debugAST() const {
@@ -126,7 +126,7 @@ void StmtAST::debugAST() const {
 
 //===----------definition of BaseExpAST----------------===//
 //===--------------------------------------------------===//
-std::string ExpBaseAST::GetPc() {
+std::string ExpBaseAST::GetValOrAddr() {
     if (is_number) return std::to_string(val);
     else {
         return "%" + std::to_string(addr);
@@ -134,29 +134,271 @@ std::string ExpBaseAST::GetPc() {
 }
 
 //===----------definition of ExpAST-------------------===//
-// Exp ::= AddExp;
+// Exp ::= LOrExp;
 //===-------------------------------------------------===//
 void ExpAST::DumpAST() const {
     // std::cout << "        ";
-    add_exp->DumpAST();
+    l_or_exp->DumpAST();
   }
 
 void ExpAST::DumpIR() const {
-    add_exp->DumpIR();
+    l_or_exp->DumpIR();
 }
 
 void ExpAST::debugAST() const {
-    std::cout << "        AddAST -> ExpAST" << std::endl;
-    add_exp->debugAST();
+    std::cout << "        LOrAST -> ExpAST" << std::endl;
+    l_or_exp->debugAST();
 }
 
 void ExpAST::Eval() {
-    add_exp->Eval();
+    l_or_exp->Eval();
     // whether is num depends on the son.
-    is_number = add_exp->is_number;
-    val = add_exp->val;
-    addr = add_exp->addr;
+    is_number = l_or_exp->is_number;
+    val = l_or_exp->val;
+    addr = l_or_exp->addr;
 }
+
+
+//===----------definition of LOrExpAST----------------===//
+// LOrExp ::= LAndExp | LOrExp "||" LAndExp;
+//===-------------------------------------------------===//
+void LOrExpAST::DumpAST() const{
+    if (l_or_exp) {
+        l_or_exp->DumpAST();
+        std::cout << "||";
+        l_and_exp->DumpAST();
+    }
+    else {
+        l_and_exp->DumpAST();
+    }
+}
+
+void LOrExpAST::DumpIR() const{
+    if (l_or_exp) {
+        l_or_exp->DumpIR();
+        l_and_exp->DumpIR();
+        std::cout << "  %" << addr << " = " << "or " << l_or_exp->GetValOrAddr()
+        << ", " << l_and_exp->GetValOrAddr() << std::endl;
+    }
+    else {
+        l_and_exp->DumpIR();
+    }
+}
+
+void LOrExpAST::debugAST() const {
+    if (l_or_exp) {
+        std::cout << "          LOrAST op(" << "||" << ") LAndAST" << "-> LOrAST" << std::endl;
+        l_or_exp->debugAST();
+        //std::cout << op;
+        l_and_exp->debugAST();
+    }
+    else {
+        std::cout << "          LAndAST -> LOrAST" << std::endl;
+        l_and_exp->debugAST();
+    }
+}
+
+void LOrExpAST::Eval() {
+    if (l_or_exp) {
+        l_or_exp->Eval();
+        l_and_exp->Eval();
+        is_number = false;
+        addr = NewTempVar();
+    }
+    else {
+        l_and_exp->Eval();
+        is_number = l_and_exp->is_number;
+        val = l_and_exp->val;
+        addr = l_and_exp->addr;
+    }
+}
+
+
+//===----------definition of LAndExpAST----------------===//
+// LAndExp ::= EqExp | LAndExp "&&" EqExp;
+//===-------------------------------------------------===//
+void LAndExpAST::DumpAST() const{
+    if (l_and_exp) {
+        l_and_exp->DumpAST();
+        std::cout << "&&";
+        eq_exp->DumpAST();
+    }
+    else {
+        eq_exp->DumpAST();
+    }
+}
+
+void LAndExpAST::DumpIR() const{
+    if (l_and_exp) {
+        l_and_exp->DumpIR();
+        eq_exp->DumpIR();
+        std::cout << "  %" << addr << " = " << "and " << l_and_exp->GetValOrAddr()
+        << ", " << eq_exp->GetValOrAddr() << std::endl;
+    }
+    else {
+        eq_exp->DumpIR();
+    }
+}
+
+void LAndExpAST::debugAST() const {
+    if (l_and_exp) {
+        std::cout << "          LAndAST op(" << "&&" << ") EqAST" << "-> LAndAST" << std::endl;
+        l_and_exp->debugAST();
+        //std::cout << op;
+        eq_exp->debugAST();
+    }
+    else {
+        std::cout << "          EqAST -> LAndAST" << std::endl;
+        eq_exp->debugAST();
+    }
+}
+
+void LAndExpAST::Eval() {
+    if (l_and_exp) {
+        l_and_exp->Eval();
+        eq_exp->Eval();
+        is_number = false;
+        addr = NewTempVar();
+    }
+    else {
+        eq_exp->Eval();
+        is_number = eq_exp->is_number;
+        val = eq_exp->val;
+        addr = eq_exp->addr;
+    }
+}
+
+
+//===----------definition of EqAST----------------===//
+// EqExp       ::= RelExp | EqExp ("==" | "!=") RelExp;
+//===-------------------------------------------------===//
+void EqExpAST::DumpAST() const{
+    if (eq_exp) {
+        eq_exp->DumpAST();
+        std::cout << op;
+        rel_exp->DumpAST();
+    }
+    else {
+        rel_exp->DumpAST();
+    }
+}
+
+void EqExpAST::DumpIR() const{
+    if (eq_exp) {
+        eq_exp->DumpIR();
+        rel_exp->DumpIR();
+        if (op == "==") {
+            std::cout << "  %" << addr << " = " << "eq " << eq_exp->GetValOrAddr()
+            << ", " << rel_exp->GetValOrAddr() << std::endl;
+        }
+        else if (op == "!=") {
+            std::cout << "  %" << addr << " = " << "ne " << eq_exp->GetValOrAddr()
+            << ", " << rel_exp->GetValOrAddr() << std::endl;
+        }
+    }
+    else {
+        rel_exp->DumpIR();
+    }
+}
+
+void EqExpAST::debugAST() const {
+    if (eq_exp) {
+        std::cout << "          EqAST op(" << op << ") RelAST" << "-> EqAST" << std::endl;
+        eq_exp->debugAST();
+        //std::cout << op;
+        rel_exp->debugAST();
+    }
+    else {
+        std::cout << "          RelAST -> EqAST" << std::endl;
+        rel_exp->debugAST();
+    }
+}
+
+void EqExpAST::Eval() {
+    if (eq_exp) {
+        eq_exp->Eval();
+        rel_exp->Eval();
+        is_number = false;
+        addr = NewTempVar();
+    }
+    else {
+        rel_exp->Eval();
+        is_number = rel_exp->is_number;
+        val = rel_exp->val;
+        addr = rel_exp->addr;
+    }
+}
+
+
+//===----------definition of RelAST----------------===//
+// RelExp      ::= AddExp | RelExp ("<" | ">" | "<=" | ">=") AddExp;
+//===-------------------------------------------------===//
+void RelExpAST::DumpAST() const{
+    if (rel_exp) {
+        rel_exp->DumpAST();
+        std::cout << op;
+        add_exp->DumpAST();
+    }
+    else {
+        add_exp->DumpAST();
+    }
+}
+
+void RelExpAST::DumpIR() const{
+    if (rel_exp) {
+        rel_exp->DumpIR();
+        add_exp->DumpIR();
+        if (op == "<") {
+            std::cout << "  %" << addr << " = " << "lt " << rel_exp->GetValOrAddr()
+            << ", " << add_exp->GetValOrAddr() << std::endl;
+        }
+        else if (op == ">") {
+            std::cout << "  %" << addr << " = " << "gt " << rel_exp->GetValOrAddr()
+            << ", " << add_exp->GetValOrAddr() << std::endl;
+        }
+        else if (op == "<=") {
+            std::cout << "  %" << addr << " = " << "le " << rel_exp->GetValOrAddr()
+            << ", " << add_exp->GetValOrAddr() << std::endl;
+        }
+        else if (op == ">=") {
+            std::cout << "  %" << addr << " = " << "ge " << rel_exp->GetValOrAddr()
+            << ", " << add_exp->GetValOrAddr() << std::endl;
+        }
+    }
+    else {
+        add_exp->DumpIR();
+    }
+}
+
+void RelExpAST::debugAST() const {
+    if (rel_exp) {
+        std::cout << "          RelAST op(" << op << ") AddAST" << "-> RelAST" << std::endl;
+        rel_exp->debugAST();
+        //std::cout << op;
+        add_exp->debugAST();
+    }
+    else {
+        std::cout << "          AddAST -> RelAST" << std::endl;
+        add_exp->debugAST();
+    }
+}
+
+void RelExpAST::Eval() {
+    if (rel_exp) {
+        rel_exp->Eval();
+        add_exp->Eval();
+        is_number = false;
+        addr = NewTempVar();
+    }
+    else {
+        add_exp->Eval();
+        is_number = add_exp->is_number;
+        val = add_exp->val;
+        addr = add_exp->addr;
+    }
+}
+
+
 //===----------definition of AddExpAST----------------===//
 // addExp ::= mulExp | addExp ("+" | "-") mulExp;
 //===-------------------------------------------------===//
@@ -176,12 +418,12 @@ void AddExpAST::DumpIR() const {
         add_exp->DumpIR();
         mul_exp->DumpIR();
         if (op == "+") {
-            std::cout << "  %" << addr << " = " << "add " << add_exp->GetPc() << ", " << mul_exp->GetPc()
-                      << std::endl;
+            std::cout << "  %" << addr << " = " << "add " << add_exp->GetValOrAddr() 
+            << ", " << mul_exp->GetValOrAddr() << std::endl;
         }
         else if (op == "-") {
-            std::cout << "  %" << addr << " = " << "sub " << add_exp->GetPc() << ", " << mul_exp->GetPc()
-                      << std::endl;            
+            std::cout << "  %" << addr << " = " << "sub " << add_exp->GetValOrAddr()
+            << ", " << mul_exp->GetValOrAddr() << std::endl;            
         }
     }
     else {
@@ -237,15 +479,15 @@ void MulExpAST::DumpIR() const {
         mul_exp->DumpIR();
         unary_exp->DumpIR();
         if (op == "*") {
-            std::cout << "  %" << addr << " = " << "mul " << mul_exp->GetPc() << ", " << unary_exp->GetPc()
+            std::cout << "  %" << addr << " = " << "mul " << mul_exp->GetValOrAddr() << ", " << unary_exp->GetValOrAddr()
                       << std::endl;
         }
         else if (op == "/") {
-            std::cout << "  %" << addr << " = " << "div " << mul_exp->GetPc() << ", " << unary_exp->GetPc()
+            std::cout << "  %" << addr << " = " << "div " << mul_exp->GetValOrAddr() << ", " << unary_exp->GetValOrAddr()
                       << std::endl;            
         }
         else if (op == "%") {
-            std::cout << "  %" << addr << " = " << "mod " << mul_exp->GetPc() << ", " << unary_exp->GetPc()
+            std::cout << "  %" << addr << " = " << "mod " << mul_exp->GetValOrAddr() << ", " << unary_exp->GetValOrAddr()
                       << std::endl;            
         }        
     }
@@ -304,11 +546,11 @@ void UnaryExpAST::DumpIR() const {
         }
         else if (unary_op == "-") {
             unary_exp->DumpIR();
-            std::cout << "  %" << addr << " = " << "sub 0, " << unary_exp->GetPc()
+            std::cout << "  %" << addr << " = " << "sub 0, " << unary_exp->GetValOrAddr()
                       << std::endl;            
         }
         else if (unary_op == "!") {
-            std::cout << "  %" << addr << " = " << "eq 0, " << unary_exp->GetPc()
+            std::cout << "  %" << addr << " = " << "eq 0, " << unary_exp->GetValOrAddr()
                       << std::endl;
         }
     }

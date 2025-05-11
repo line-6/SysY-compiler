@@ -26,6 +26,21 @@
 // Number      ::= INT_CONST;
 // UnaryOp     ::= "+" | "-" | "!";
 
+/*
+Exp         ::= LOrExp;
+LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
+LAndExp     ::= EqExp | LAndExp "&&" EqExp;
+EqExp       ::= RelExp | EqExp ("==" | "!=") RelExp;
+RelExp      ::= AddExp | RelExp ("<" | ">" | "<=" | ">=") AddExp;
+
+AddExp      ::= MulExp | AddExp ("+" | "-") MulExp;
+MulExp      ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp;
+UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
+PrimaryExp  ::= "(" Exp ")" | Number;
+Number      ::= INT_CONST;
+UnaryOp     ::= "+" | "-" | "!";
+*/
+
 
 // 有一个问题，怎么较好地debug AST？（较好地打印AST信息）
 
@@ -115,7 +130,7 @@ public:
   // 对每个 ast 节点：
   // 1. 如果是 number， 返回 number 的值
   // 2. 如果不是 number 返回 addr
-  std::string GetPc();
+  std::string GetValOrAddr();
   // 判断每个节点：
   // 1. 是 number：设置 is_number = true 和 val;
   // 2. 不是 number：设置 addr 为临时变量 pc 的值
@@ -124,11 +139,81 @@ public:
 };
 
 //===----------Decalre of ExpAST----------------===//
-// Exp ::= AddExp;
+// Exp ::= LOrExp;
 //===-------------------------------------------------===//
 class ExpAST : public ExpBaseAST {
   public:
+  std::unique_ptr<ExpBaseAST> l_or_exp;
+
+  void DumpAST() const override;
+
+  void DumpIR() const override;
+
+  void debugAST() const override;
+
+  void Eval() override;
+};
+
+//===----------Decalre of LOrExpAST----------------===//
+// LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
+//===-------------------------------------------------===//
+class LOrExpAST : public ExpBaseAST {
+  public:
+  std::unique_ptr<ExpBaseAST> l_and_exp = nullptr;
+  std::unique_ptr<ExpBaseAST> l_or_exp = nullptr;
+
+  void DumpAST() const override;
+
+  void DumpIR() const override;
+
+  void debugAST() const override;
+
+  void Eval() override;
+};
+
+//===----------Decalre of LAndExpAST----------------===//
+// LAndExp     ::= EqExp | LAndExp "&&" EqExp;
+//===-------------------------------------------------===//
+class LAndExpAST : public ExpBaseAST {
+  public:
+  std::unique_ptr<ExpBaseAST> eq_exp;
+  std::unique_ptr<ExpBaseAST> l_and_exp;
+
+  void DumpAST() const override;
+
+  void DumpIR() const override;
+
+  void debugAST() const override;
+
+  void Eval() override;  
+};
+
+//===----------Decalre of EqAST----------------===//
+// EqExp       ::= RelExp | EqExp ("==" | "!=") RelExp;
+//===-------------------------------------------------===//
+class EqExpAST : public ExpBaseAST {
+  public:
+  std::unique_ptr<ExpBaseAST> rel_exp;
+  std::unique_ptr<ExpBaseAST> eq_exp;
+  std::string op;
+
+  void DumpAST() const override;
+
+  void DumpIR() const override;
+
+  void debugAST() const override;
+
+  void Eval() override;
+};
+
+//===----------Decalre of RelAST----------------===//
+// RelExp      ::= AddExp | RelExp ("<" | ">" | "<=" | ">=") AddExp;
+//===-------------------------------------------------===//
+class RelExpAST : public ExpBaseAST {
+  public:
   std::unique_ptr<ExpBaseAST> add_exp;
+  std::unique_ptr<ExpBaseAST> rel_exp;
+  std::string op;
 
   void DumpAST() const override;
 

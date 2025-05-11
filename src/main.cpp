@@ -29,8 +29,8 @@ int main(int argc, const char *argv[]) {
   auto ret = yyparse(ast);
   assert(!ret);
 
-  // ast->debugAST();
-  // std::cout << "*****************" << std::endl;
+  ast->debugAST();
+  std::cout << "*****************" << std::endl;
   ast->DumpAST();
 
   //koopa_ir codegen

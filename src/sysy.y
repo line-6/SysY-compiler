@@ -1,14 +1,17 @@
 // Stmt        ::= "return" Exp ";";
-    
-// Exp         ::= AddExp;
-// PrimaryExp  ::= "(" Exp ")" | Number;
-// Number      ::= INT_CONST;
-// UnaryExp    ::= PrimaryExp | unaryOp UnaryExp;
-// unaryOp     ::= "+" | "-" | "!";
-
-// MulExp      ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp;
-// AddExp      ::= MulExp | AddExp ("+" | "-") MulExp;
-
+/*
+Exp         ::= LOrExp;
+LOrExp      ::= LAndExp | LOrExp "||" LAndExp;
+LAndExp     ::= EqExp | LAndExp "&&" EqExp;
+EqExp       ::= RelExp | EqExp ("==" | "!=") RelExp;
+RelExp      ::= AddExp | RelExp ("<" | ">" | "<=" | ">=") AddExp;
+AddExp      ::= MulExp | AddExp ("+" | "-") MulExp;
+MulExp      ::= UnaryExp | MulExp ("*" | "/" | "%") UnaryExp;
+UnaryExp    ::= PrimaryExp | UnaryOp UnaryExp;
+PrimaryExp  ::= "(" Exp ")" | Number;
+Number      ::= INT_CONST;
+UnaryOp     ::= "+" | "-" | "!";
+*/
 
 %code requires {
   #include <memory>
@@ -51,11 +54,12 @@ BaseAST* handle_mulOp(const std::string& op, BaseAST* MulExp, BaseAST* UnaryExp)
 }
 
 %token INT RETURN 
-%token <str_val> IDENT 
+// CMP_EQL_LOGIC_OP: 除加减乘除外的所有运算符
+%token <str_val> IDENT CMP_OP EQL_OP LOGIC_OR_OP LOGIC_AND_OP
 %token <int_val> INT_CONST
 
 %type <ast_val> FuncDef FuncType Block Stmt 
-%type <exp_ast_val> Exp AddExp MulExp UnaryExp PrimaryExp
+%type <exp_ast_val> Exp LOrExp LAndExp EqExp RelExp AddExp MulExp UnaryExp PrimaryExp
 %type <int_val> Number 
 
 %%
@@ -113,12 +117,72 @@ Stmt
   ;
 
 Exp
-  : AddExp {
+  : LOrExp {
     auto ast = new ExpAST();
-    ast->add_exp = std::unique_ptr<ExpBaseAST>($1);
+    ast->l_or_exp = std::unique_ptr<ExpBaseAST>($1);
     $$ = ast;
   }
   ;
+
+LOrExp
+  : LAndExp {
+    auto ast = new LOrExpAST();
+    ast->l_and_exp = std::unique_ptr<ExpBaseAST>($1);
+    $$ = ast;
+  }
+  | LOrExp LOGIC_OR_OP LAndExp { 
+    auto ast = new LOrExpAST();
+    ast->l_or_exp = std::unique_ptr<ExpBaseAST>($1);
+    //ast->op = *CMP_EQL_LOGIC_OP;
+    ast->l_and_exp = std::unique_ptr<ExpBaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
+LAndExp
+  : EqExp {
+    auto ast = new LAndExpAST();
+    ast->eq_exp = std::unique_ptr<ExpBaseAST>($1);
+    $$ = ast;
+  }
+  | LAndExp LOGIC_AND_OP EqExp { 
+    auto ast = new LAndExpAST();
+    ast->l_and_exp = std::unique_ptr<ExpBaseAST>($1);
+    //ast->op = *CMP_EQL_LOGIC_OP;
+    ast->eq_exp = std::unique_ptr<ExpBaseAST>($3);
+    $$ = ast;
+  }
+  ;
+
+EqExp
+  : RelExp {
+    auto ast = new EqExpAST();
+    ast->rel_exp = std::unique_ptr<ExpBaseAST>($1);
+    $$ = ast;
+  }
+  | EqExp EQL_OP RelExp { 
+    auto ast = new EqExpAST();
+    ast->eq_exp = std::unique_ptr<ExpBaseAST>($1);
+    ast->op = *std::unique_ptr<std::string>($2);
+    ast->rel_exp = std::unique_ptr<ExpBaseAST>($3);
+    $$ = ast;
+  }
+  ;  
+
+RelExp
+  : AddExp {
+    auto ast = new RelExpAST();
+    ast->add_exp = std::unique_ptr<ExpBaseAST>($1);
+    $$ = ast;
+  }
+  | RelExp CMP_OP AddExp { 
+    auto ast = new RelExpAST();
+    ast->rel_exp = std::unique_ptr<ExpBaseAST>($1);
+    ast->op = *std::unique_ptr<std::string>($2);
+    ast->add_exp = std::unique_ptr<ExpBaseAST>($3);
+    $$ = ast;
+  }
+  ; 
 
 AddExp
   : MulExp {

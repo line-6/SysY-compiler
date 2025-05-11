@@ -23,6 +23,11 @@ Dec_num         [1-9][0-9]*
 Oct_num         0[0-7]*
 Hex_num         0[xX][0-9a-fA-F]+
 
+CmpOp           (<=|>=|<|>)
+LogicOrOp       (\|\|)
+LogicAndOp      (&&)
+EqlOp           (==|!=)
+
 %%
 
 {WhiteSpace}    { /* 忽略, 不做任何操作 */ }
@@ -48,6 +53,18 @@ Hex_num         0[xX][0-9a-fA-F]+
 
 {Hex_num}       {   yylval.int_val = strtol(yytext, nullptr, 0); 
                     return INT_CONST; }
+
+{CmpOp}         {   yylval.str_val = new string(yytext);
+                    return CMP_OP;}
+
+{LogicOrOp}       {   yylval.str_val = new string(yytext);
+                    return LOGIC_OR_OP;}
+
+{LogicAndOp}       {   yylval.str_val = new string(yytext);
+                    return LOGIC_AND_OP;}
+
+{EqlOp}         {   yylval.str_val = new string(yytext);
+                    return EQL_OP;}
 
 .               {   /* std::cout << "this is .:" + yytext[0]<< std::endl; */
                     return yytext[0]; }
