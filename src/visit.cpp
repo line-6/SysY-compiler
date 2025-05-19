@@ -118,9 +118,6 @@ void visit(const koopa_raw_return_t &ret) {
     std::cout << "  ret" << std::endl;
 }
 
-// 代码略显臃肿，后续优化
-// 1. 把例如 std::cout << "  xor   " << reg[reg_pc++] << ", " << "x0, x0" << std::endl;
-//     这种cout都写成一个函数 xor(string a, string b, string c);不再写复杂的cout表达式了
 static void koopa_to_rsicv_bo_eq(const koopa_raw_binary_t &binary) {
    
     /* 分三种情况：
@@ -137,7 +134,10 @@ static void koopa_to_rsicv_bo_eq(const koopa_raw_binary_t &binary) {
         int left_num  = binary.lhs->kind.data.integer.value;
         int right_num = binary.rhs->kind.data.integer.value;
         if (left_num != 0 && right_num != 0) {
-            // 目前见不到这种情况
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("xor"), reg[reg_pc - 1], reg[reg_pc - 2], reg[reg_pc - 1]);
+            dump(std::string("seqz"), reg[reg_pc - 1], reg[reg_pc - 1]);
         }
 
         else if (left_num == 0 && right_num == 0) {
@@ -479,31 +479,469 @@ static void koopa_to_rsicv_bo_mod(const koopa_raw_binary_t &binary) {
 }
 
 static void koopa_to_rsicv_bo_neq(const koopa_raw_binary_t &binary) {
+   if (binary.lhs->kind.tag == KOOPA_RVT_INTEGER && binary.rhs->kind.tag == KOOPA_RVT_INTEGER) {
+        // 立即数除了 0 (直接调用x0)，都需要先 load 进寄存器
+        int left_num  = binary.lhs->kind.data.integer.value;
+        int right_num = binary.rhs->kind.data.integer.value;
+        if (left_num != 0 && right_num != 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("xor"), reg[reg_pc - 1], reg[reg_pc - 2], reg[reg_pc - 1]);
+            dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]);
+        }
 
+        else if (left_num == 0 && right_num == 0) {
+            dump(std::string("xor"), reg[reg_pc++], std::string("x0"), std::string("x0"));
+            dump(std::string("snez"), reg[reg_pc - 1],reg[reg_pc - 1]);
+        }
+
+        else if (left_num != 0 && right_num == 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+            dump(std::string("xor"), reg[reg_pc - 1], reg[reg_pc - 1], std::string("x0"));
+            dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]); 
+        } 
+
+        else if (left_num == 0 && right_num != 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("xor"), reg[reg_pc - 1], std::string("x0"), reg[reg_pc - 1]);
+            dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]);
+        }
+   }
+
+   else if (binary.lhs->kind.tag == KOOPA_RVT_INTEGER && binary.rhs->kind.tag == KOOPA_RVT_BINARY) {
+        int left_num  = binary.lhs->kind.data.integer.value;
+        size_t right_offs = val_offs[binary.rhs];
+
+        if (left_num == 0) {
+            dump(std::string("xor"), reg[reg_pc++], std::string("x0"), reg[right_offs]);
+            dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]);
+        }
+        else {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+            dump(std::string("xor"), reg[reg_pc - 1], reg[reg_pc - 1], reg[right_offs]);
+            dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]);
+        }
+   }
+
+   else if (binary.lhs->kind.tag == KOOPA_RVT_BINARY && binary.rhs->kind.tag == KOOPA_RVT_BINARY) {
+        size_t left_offs = val_offs[binary.lhs];
+        size_t right_offs = val_offs[binary.rhs];
+
+        dump(std::string("xor"), reg[reg_pc++], reg[left_offs], reg[right_offs]);
+        dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]);
+   }
+
+   else {
+        int right_num  = binary.rhs->kind.data.integer.value;
+        size_t left_offs = val_offs[binary.lhs];
+
+        if (right_num == 0) {
+            dump(std::string("xor"), reg[reg_pc++], reg[left_offs], std::string("x0"));
+            dump("snez", reg[reg_pc - 1], reg[reg_pc - 1]);
+        }
+        else {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("xor"), reg[reg_pc - 1], reg[left_offs], reg[reg_pc - 1]);
+            dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]);
+        }
+   }
 }
 
 static void koopa_to_rsicv_bo_gt(const koopa_raw_binary_t &binary) {
-    
+    if (binary.lhs->kind.tag == KOOPA_RVT_INTEGER) {
+        int left_num = binary.lhs->kind.data.integer.value;
+        // 左整数，右整数
+        if (binary.rhs->kind.tag == KOOPA_RVT_INTEGER) {
+            int right_num = binary.rhs->kind.data.integer.value;
+
+            if (left_num != 0 && right_num != 0) {
+                dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+                dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+                dump(std::string("slt"), reg[reg_pc - 1], reg[reg_pc - 1], reg[reg_pc - 2]);
+            }
+            else if (left_num == 0 && right_num == 0) {
+            }
+            else if (left_num != 0 && right_num == 0) {
+            }
+            else if (left_num == 0 && right_num != 0) {
+                dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+                dump(std::string("slt"), reg[reg_pc - 1], reg[reg_pc - 1], std::string("x0"));
+            }
+        }
+        // 左整数，右变量
+        else if (binary.rhs->kind.tag == KOOPA_RVT_BINARY) {
+            size_t right_offs = val_offs[binary.rhs];
+            if (left_num == 0) {
+                dump(std::string("slt"), reg[reg_pc++], reg[right_offs], std::string("x0"));
+            }
+            else {
+                dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+                dump(std::string("slt"), reg[reg_pc - 1], reg[right_offs], reg[reg_pc - 1]);
+            }
+        }
+    }
+    else if (binary.lhs->kind.tag == KOOPA_RVT_BINARY) {
+        size_t left_offs = val_offs[binary.lhs];
+        // 左变量，右整数
+        if (binary.rhs->kind.tag == KOOPA_RVT_INTEGER)  {
+            int right_num = binary.rhs->kind.data.integer.value;
+            if (right_num == 0) {
+                dump(std::string("slt"), reg[reg_pc++], std::string("x0"), reg[left_offs]);
+            }
+            else {
+                dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+                dump(std::string("slt"), reg[reg_pc - 1], reg[reg_pc - 1], reg[left_offs]);
+            }
+        }
+        // 左变量，右变量
+        else if (binary.rhs->kind.tag == KOOPA_RVT_BINARY) {
+            //size_t left_offs = val_offs[binary.lhs];
+            size_t right_offs = val_offs[binary.rhs];
+            dump(std::string("slt"), reg[reg_pc++], reg[right_offs], reg[left_offs]);
+        }
+    }
 }
 
 static void koopa_to_rsicv_bo_lt(const koopa_raw_binary_t &binary) {
-    
+    if (binary.lhs->kind.tag == KOOPA_RVT_INTEGER) {
+        int left_num = binary.lhs->kind.data.integer.value;
+        // 左整数，右整数
+        if (binary.rhs->kind.tag == KOOPA_RVT_INTEGER) {
+            int right_num = binary.rhs->kind.data.integer.value;
+
+            if (left_num != 0 && right_num != 0) {
+                dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+                dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+                dump(std::string("slt"), reg[reg_pc - 1], reg[reg_pc - 2], reg[reg_pc - 1]);
+            }
+            else if (left_num == 0 && right_num == 0) {
+            }
+            else if (left_num != 0 && right_num == 0) {
+            }
+            else if (left_num == 0 && right_num != 0) {
+                dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+                dump(std::string("slt"), reg[reg_pc - 1], std::string("x0"), reg[reg_pc - 1]);
+            }
+        }
+        // 左整数，右变量
+        else if (binary.rhs->kind.tag == KOOPA_RVT_BINARY) {
+            size_t right_offs = val_offs[binary.rhs];
+            if (left_num == 0) {
+                dump(std::string("slt"), reg[reg_pc++], std::string("x0"), reg[right_offs]);
+            }
+            else {
+                dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+                dump(std::string("slt"), reg[reg_pc - 1], reg[reg_pc - 1], reg[right_offs]);
+            }
+        }
+    }
+    else if (binary.lhs->kind.tag == KOOPA_RVT_BINARY) {
+        size_t left_offs = val_offs[binary.lhs];
+        // 左变量，右整数
+        if (binary.rhs->kind.tag == KOOPA_RVT_INTEGER)  {
+            int right_num = binary.rhs->kind.data.integer.value;
+            if (right_num == 0) {
+                dump(std::string("slt"), reg[reg_pc++], reg[left_offs], std::string("x0"));
+            }
+            else {
+                dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+                dump(std::string("slt"), reg[reg_pc - 1], reg[left_offs], reg[reg_pc - 1]);
+            }
+        }
+        // 左变量，右变量
+        else if (binary.rhs->kind.tag == KOOPA_RVT_BINARY) {
+            //size_t left_offs = val_offs[binary.lhs];
+            size_t right_offs = val_offs[binary.rhs];
+            dump(std::string("slt"), reg[reg_pc++], reg[left_offs], reg[right_offs]);
+        }
+    }
 }
 
 static void koopa_to_rsicv_bo_ge(const koopa_raw_binary_t &binary) {
-    
+    if (binary.lhs->kind.tag == KOOPA_RVT_INTEGER && binary.rhs->kind.tag == KOOPA_RVT_INTEGER) {
+        // 立即数除了 0 (直接调用x0)，都需要先 load 进寄存器
+        int left_num  = binary.lhs->kind.data.integer.value;
+        int right_num = binary.rhs->kind.data.integer.value;
+        if (left_num != 0 && right_num != 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("slt"), reg[reg_pc - 1], reg[reg_pc - 2], reg[reg_pc - 1]);
+            dump(std::string("xori"), reg[reg_pc - 1], reg[reg_pc - 1], "1");
+        }
+
+        else if (left_num == 0 && right_num == 0) {
+            dump(std::string("slt"), reg[reg_pc++], std::string("x0"), std::string("x0"));
+            dump(std::string("xori"), reg[reg_pc - 1],reg[reg_pc - 1], "1");
+        }
+
+        else if (left_num != 0 && right_num == 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+            dump(std::string("slt"), reg[reg_pc - 1], reg[reg_pc - 1], std::string("x0"));
+            dump(std::string("xori"), reg[reg_pc - 1], reg[reg_pc - 1], "1"); 
+        } 
+
+        else if (left_num == 0 && right_num != 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("slt"), reg[reg_pc - 1], std::string("x0"), reg[reg_pc - 1]);
+            dump(std::string("xori"), reg[reg_pc - 1], reg[reg_pc - 1], "1");
+        }
+   }
+
+   else if (binary.lhs->kind.tag == KOOPA_RVT_INTEGER && binary.rhs->kind.tag == KOOPA_RVT_BINARY) {
+        int left_num  = binary.lhs->kind.data.integer.value;
+        size_t right_offs = val_offs[binary.rhs];
+
+        if (left_num == 0) {
+            dump(std::string("slt"), reg[reg_pc++], std::string("x0"), reg[right_offs]);
+            dump(std::string("xori"), reg[reg_pc - 1], reg[reg_pc - 1], "1");
+        }
+        else {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+            dump(std::string("slt"), reg[reg_pc - 1], reg[reg_pc - 1], reg[right_offs]);
+            dump(std::string("xori"), reg[reg_pc - 1], reg[reg_pc - 1], "1");
+        }
+   }
+
+   else if (binary.lhs->kind.tag == KOOPA_RVT_BINARY && binary.rhs->kind.tag == KOOPA_RVT_BINARY) {
+        size_t left_offs = val_offs[binary.lhs];
+        size_t right_offs = val_offs[binary.rhs];
+
+        dump(std::string("slt"), reg[reg_pc++], reg[left_offs], reg[right_offs]);
+        dump(std::string("xori"), reg[reg_pc - 1], reg[reg_pc - 1], "1");
+   }
+
+   else {
+        int right_num  = binary.rhs->kind.data.integer.value;
+        size_t left_offs = val_offs[binary.lhs];
+
+        if (right_num == 0) {
+            dump(std::string("slt"), reg[reg_pc++], reg[left_offs], std::string("x0"));
+            dump("xori", reg[reg_pc - 1], reg[reg_pc - 1], "1");
+        }
+        else {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("slt"), reg[reg_pc - 1], reg[left_offs], reg[reg_pc - 1]);
+            dump(std::string("xori"), reg[reg_pc - 1], reg[reg_pc - 1], "1");
+        }
+   }
 }
 
+// a <= b <=> !(b < a)
 static void koopa_to_rsicv_bo_le(const koopa_raw_binary_t &binary) {
-    
+    if (binary.lhs->kind.tag == KOOPA_RVT_INTEGER && binary.rhs->kind.tag == KOOPA_RVT_INTEGER) {
+        // 立即数除了 0 (直接调用x0)，都需要先 load 进寄存器
+        int left_num  = binary.lhs->kind.data.integer.value;
+        int right_num = binary.rhs->kind.data.integer.value;
+        if (left_num != 0 && right_num != 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("slt"), reg[reg_pc - 1], reg[reg_pc - 1], reg[reg_pc - 2]);
+            dump(std::string("xori"), reg[reg_pc - 1], reg[reg_pc - 1], "1");
+        }
+
+        else if (left_num == 0 && right_num == 0) {
+            dump(std::string("slt"), reg[reg_pc++], std::string("x0"), std::string("x0"));
+            dump(std::string("xori"), reg[reg_pc - 1],reg[reg_pc - 1], "1");
+        }
+
+        else if (left_num != 0 && right_num == 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+            dump(std::string("slt"), reg[reg_pc - 1], std::string("x0"), reg[reg_pc - 1]);
+            dump(std::string("xori"), reg[reg_pc - 1], reg[reg_pc - 1], "1"); 
+        } 
+
+        else if (left_num == 0 && right_num != 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("slt"), reg[reg_pc - 1], reg[reg_pc - 1], std::string("x0"));
+            dump(std::string("xori"), reg[reg_pc - 1], reg[reg_pc - 1], "1");
+        }
+   }
+
+   else if (binary.lhs->kind.tag == KOOPA_RVT_INTEGER && binary.rhs->kind.tag == KOOPA_RVT_BINARY) {
+        int left_num  = binary.lhs->kind.data.integer.value;
+        size_t right_offs = val_offs[binary.rhs];
+
+        if (left_num == 0) {
+            dump(std::string("slt"), reg[reg_pc++], reg[right_offs], std::string("x0"));
+            dump(std::string("xori"), reg[reg_pc - 1], reg[reg_pc - 1], "1");
+        }
+        else {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+            dump(std::string("slt"), reg[reg_pc - 1], reg[right_offs], reg[reg_pc - 1]);
+            dump(std::string("xori"), reg[reg_pc - 1], reg[reg_pc - 1], "1");
+        }
+   }
+
+   else if (binary.lhs->kind.tag == KOOPA_RVT_BINARY && binary.rhs->kind.tag == KOOPA_RVT_BINARY) {
+        size_t left_offs = val_offs[binary.lhs];
+        size_t right_offs = val_offs[binary.rhs];
+
+        dump(std::string("slt"), reg[reg_pc++], reg[right_offs], reg[left_offs]);
+        dump(std::string("xori"), reg[reg_pc - 1], reg[reg_pc - 1], "1");
+   }
+
+   else {
+        int right_num  = binary.rhs->kind.data.integer.value;
+        size_t left_offs = val_offs[binary.lhs];
+
+        if (right_num == 0) {
+            dump(std::string("slt"), reg[reg_pc++], std::string("x0"), reg[left_offs]);
+            dump("xori", reg[reg_pc - 1], reg[reg_pc - 1], "1");
+        }
+        else {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("slt"), reg[reg_pc - 1], reg[reg_pc - 1], reg[left_offs]);
+            dump(std::string("xori"), reg[reg_pc - 1], reg[reg_pc - 1], "1");
+        }
+   }
 }
 
 static void koopa_to_rsicv_bo_and(const koopa_raw_binary_t &binary) {
-    
+    if (binary.lhs->kind.tag == KOOPA_RVT_INTEGER && binary.rhs->kind.tag == KOOPA_RVT_INTEGER) {
+        // 立即数除了 0 (直接调用x0)，都需要先 load 进寄存器
+        int left_num  = binary.lhs->kind.data.integer.value;
+        int right_num = binary.rhs->kind.data.integer.value;
+        if (left_num != 0 && right_num != 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("snez"), reg[reg_pc - 2], reg[reg_pc - 2]);
+            dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]);
+            dump(std::string("and"), reg[reg_pc - 1], reg[reg_pc - 2], reg[reg_pc - 1]);
+        }
+
+        else if (left_num == 0 && right_num == 0) {
+            dump(std::string("and"), "x0", "x0");
+        }
+
+        else if (left_num != 0 && right_num == 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+            dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]);
+            dump(std::string("and"), reg[reg_pc - 1], reg[reg_pc - 1], "x0");
+        } 
+
+        else if (left_num == 0 && right_num != 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]);
+            dump(std::string("and"), reg[reg_pc - 1], "x0", reg[reg_pc - 1]);
+        }
+   }
+
+   else if (binary.lhs->kind.tag == KOOPA_RVT_INTEGER && binary.rhs->kind.tag == KOOPA_RVT_BINARY) {
+        int left_num  = binary.lhs->kind.data.integer.value;
+        size_t right_offs = val_offs[binary.rhs];
+
+        if (left_num == 0) {
+            dump(std::string("snez"), reg[reg_pc++], reg[right_offs]);
+            dump(std::string("and"), reg[reg_pc++], std::string("x0"), reg[right_offs]);
+        }
+        else {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+
+            dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]);
+            dump(std::string("snez"), reg[reg_pc++], reg[right_offs]);
+
+            dump(std::string("and"), reg[reg_pc - 1], reg[reg_pc - 2], reg[reg_pc - 1]);
+        }
+   }
+
+   else if (binary.lhs->kind.tag == KOOPA_RVT_BINARY && binary.rhs->kind.tag == KOOPA_RVT_BINARY) {
+        size_t left_offs = val_offs[binary.lhs];
+        size_t right_offs = val_offs[binary.rhs];
+
+        dump(std::string("snez"), reg[reg_pc++], reg[left_offs]);
+        dump(std::string("snez"), reg[reg_pc++], reg[right_offs]);
+        dump(std::string("and"), reg[reg_pc - 1], reg[reg_pc - 2], reg[reg_pc - 1]);
+   }
+
+   else {
+        int right_num  = binary.rhs->kind.data.integer.value;
+        size_t left_offs = val_offs[binary.lhs];
+
+        if (right_num == 0) {
+            dump(std::string("snez"), reg[reg_pc++], reg[left_offs]);
+            dump(std::string("and"), reg[reg_pc++], reg[left_offs], std::string("x0"));
+        }
+        else {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("snez"), reg[reg_pc++], reg[left_offs]);
+            dump(std::string("snez"), reg[reg_pc - 2], reg[reg_pc - 2]);
+            dump(std::string("and"), reg[reg_pc - 2], reg[reg_pc - 1], reg[reg_pc - 2]);
+        }
+   }
 }
 
 static void koopa_to_rsicv_bo_or(const koopa_raw_binary_t &binary) {
-    
+    if (binary.lhs->kind.tag == KOOPA_RVT_INTEGER && binary.rhs->kind.tag == KOOPA_RVT_INTEGER) {
+        // 立即数除了 0 (直接调用x0)，都需要先 load 进寄存器
+        int left_num  = binary.lhs->kind.data.integer.value;
+        int right_num = binary.rhs->kind.data.integer.value;
+        if (left_num != 0 && right_num != 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("snez"), reg[reg_pc - 2], reg[reg_pc - 2]);
+            dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]);
+            dump(std::string("or"), reg[reg_pc - 1], reg[reg_pc - 2], reg[reg_pc - 1]);
+        }
+
+        else if (left_num == 0 && right_num == 0) {
+            dump(std::string("or"), "x0", "x0");
+        }
+
+        else if (left_num != 0 && right_num == 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+            dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]);
+            dump(std::string("or"), reg[reg_pc - 1], reg[reg_pc - 1], "x0");
+        } 
+
+        else if (left_num == 0 && right_num != 0) {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]);
+            dump(std::string("or"), reg[reg_pc - 1], "x0", reg[reg_pc - 1]);
+        }
+   }
+
+   else if (binary.lhs->kind.tag == KOOPA_RVT_INTEGER && binary.rhs->kind.tag == KOOPA_RVT_BINARY) {
+        int left_num  = binary.lhs->kind.data.integer.value;
+        size_t right_offs = val_offs[binary.rhs];
+
+        if (left_num == 0) {
+            dump(std::string("snez"), reg[reg_pc++], reg[right_offs]);
+            dump(std::string("or"), reg[reg_pc++], std::string("x0"), reg[right_offs]);
+        }
+        else {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(left_num));
+
+            dump(std::string("snez"), reg[reg_pc - 1], reg[reg_pc - 1]);
+            dump(std::string("snez"), reg[reg_pc++], reg[right_offs]);
+
+            dump(std::string("or"), reg[reg_pc - 1], reg[reg_pc - 2], reg[reg_pc - 1]);
+        }
+   }
+
+   else if (binary.lhs->kind.tag == KOOPA_RVT_BINARY && binary.rhs->kind.tag == KOOPA_RVT_BINARY) {
+        size_t left_offs = val_offs[binary.lhs];
+        size_t right_offs = val_offs[binary.rhs];
+
+        dump(std::string("snez"), reg[reg_pc++], reg[left_offs]);
+        dump(std::string("snez"), reg[reg_pc++], reg[right_offs]);
+        dump(std::string("or"), reg[reg_pc - 1], reg[reg_pc - 2], reg[reg_pc - 1]);
+   }
+
+   else {
+        int right_num  = binary.rhs->kind.data.integer.value;
+        size_t left_offs = val_offs[binary.lhs];
+
+        if (right_num == 0) {
+            dump(std::string("snez"), reg[reg_pc++], reg[left_offs]);
+            dump(std::string("or"), reg[reg_pc++], reg[left_offs], std::string("x0"));
+        }
+        else {
+            dump(std::string("li"), reg[reg_pc++], std::to_string(right_num));
+            dump(std::string("snez"), reg[reg_pc++], reg[left_offs]);
+            dump(std::string("snez"), reg[reg_pc - 2], reg[reg_pc - 2]);
+            dump(std::string("or"), reg[reg_pc - 2], reg[reg_pc - 1], reg[reg_pc - 2]);
+        }
+   }
 }
 
 void visit(const koopa_raw_binary_t &binary) {

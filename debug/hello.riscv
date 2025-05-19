@@ -1,5 +1,17 @@
    .text
    .global main
 main:
-  mv    a0, 
+  li   t0, 1
+  li   t1, 2
+  slt   t1, t1, t0
+  xori   t1, t1, 1   // t1 = 1
+  li   t2, 3
+  li   t3, 4
+  mul   t3, t2, t3
+  li   t4, 12
+  sub   t4, t3, t4   // t4 = 0
+  snez   t5, t1
+  snez   t6, t4
+  and   t6, t5, t6
+  mv    a0, t6
   ret
